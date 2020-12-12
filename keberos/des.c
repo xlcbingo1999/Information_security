@@ -468,6 +468,13 @@ int str2uint64(unsigned char *str, uint64_t *metadata) {
     return 0;
 }
 
+/* 
+- 字符串格式密钥转为64位无符号整数格式密钥
+- 输入：
+- str: unsigned char * 字符串格式密钥
+- 输出：
+- uint64_t: 64位无符号整数格式密钥
+*/
 uint64_t kstr2k64(unsigned char *str) {
     int str_length = strlen(str);
     if (str_length != 8) return -1;
@@ -531,6 +538,15 @@ int decoder(uint64_t *secdata, int metadata_size, uint64_t *origindata, uint64_t
     return 0;
 }
 
+/* 
+- 加密函数
+- 输入：
+- str: unsigned char * 源数据的字节数组
+- sec_str: unsigned char * 加密后的字节数组
+- key: uint64_t 密钥
+- 输出：
+- int: 加密后的字节数据长度
+*/
 int encryption(unsigned char *str, unsigned char *sec_str, uint64_t key) {
     int input_str_length = strlen(str);   
     int uint64_size = input_str_length / 8 + 1;
@@ -559,6 +575,15 @@ int encryption(unsigned char *str, unsigned char *sec_str, uint64_t key) {
     return uint64_size * 8;
 }
 
+/* 
+- 解密函数
+- 输入：
+- secdata: unsigned char * 解密前数据的字节数组
+- origin_str: unsigned char * 解密后源数据的字节数组
+- key: uint64_t 密钥
+- 输出：
+- int: 解密后源数据的字节数据长度
+*/
 int decryption(unsigned char *secdata, unsigned char *origin_str, uint64_t key) {
     int secdata_length = strlen(secdata);
     int uint64_size = secdata_length / 8;
