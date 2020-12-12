@@ -15,7 +15,7 @@
 #include "des.c"
 #undef _UNICODE
 
-#define TGS_port 20005
+#define TGS_port 20202
 #define maxChar 1024
 
 const unsigned char *K_TGS = "keywith3";
@@ -67,12 +67,12 @@ int main(int argc, char **argv) {
         unsigned char messageC[maxChar];
         int messageC_len = recv(socket_client, messageC, maxChar, 0);
         messageC[messageC_len] = '\0';
-        printf("receive messageC[%s] length %d: success.\n", messageC, messageC_len);
+        printf("接收messageC: success.\n");
         
         unsigned char messageD[maxChar];
         int messageD_len = recv(socket_client, messageD, maxChar, 0);
         messageD[messageD_len] = '\0';
-        printf("receive messageD[%s] length %d: success.\n", messageD, messageD_len);
+        printf("接收messageD: success.\n");
 
         unsigned char serviceID[maxChar];
         unsigned char messageB[maxChar];
@@ -88,36 +88,35 @@ int main(int argc, char **argv) {
             messageB[i - (strlen(serviceID) + 1)] = messageC[i];
         }
         messageB[messageC_len - (strlen(serviceID) + 1)] = '\0';
-        printf("serviceID:[%s] length %d\n", serviceID, strlen(serviceID));
-        printf("messageB:[%s] length %d\n", messageB, strlen(messageB));
+        printf("分解消息C获得serviceID: %s\n", serviceID);
+        printf("分解消息C获得messageB: %s\n", messageB);
         
         unsigned char messageB_ori[maxChar];
         uint64_t key_TGS = kstr2k64(K_TGS);
         int messageB_ori_len = decryption(messageB, messageB_ori, key_TGS);
         messageB_ori[messageB_ori_len] = '\0';
-        printf("messageB_ori:[%s] length %d\n", messageB_ori, messageB_ori_len);
         
         unsigned char clientID[maxChar];
         unsigned char client_address[maxChar];
         time_t validity;
         unsigned char K_client_TGS[maxChar];
         sscanf(messageB_ori, "<%[^,],%[^,],%ld,%[^>]>", clientID, client_address, &validity, K_client_TGS);
-        printf("messageB_ori clientID:[%s] length %d\n", clientID, strlen(clientID));
-        printf("messageB_ori client_address:[%s] length %d\n", client_address, strlen(client_address));
-        printf("messageB_ori validity:[%ld]\n", validity);
-        printf("messageB_ori K_client_TGS:[%s] length %d\n", K_client_TGS, strlen(K_client_TGS));
+        printf("用K_TGS解密消息B获得clientID: %s\n", clientID);
+        printf("用K_TGS解密消息B获得client网络地址client_address: %s\n", client_address);
+        printf("用K_TGS解密消息B获得票据有效期限validity: %ld\n", validity);
+        printf("用K_TGS解密消息B获得K_client_TGS: %s\n", K_client_TGS);
 
         unsigned char messageD_ori[maxChar];
         uint64_t key_client_TGS = kstr2k64(K_client_TGS);
         int messageD_ori_len = decryption(messageD, messageD_ori, key_client_TGS);
         messageD_ori[messageD_ori_len] = '\0';
-        printf("messageD_ori:[%s] length %d\n", messageD_ori, messageD_ori_len);
+        // printf("messageD_ori:[%s] length %d\n", messageD_ori, messageD_ori_len);
 
         unsigned char clientID_ver[maxChar];
         time_t timestamp;
         sscanf(messageD_ori, "<%[^,],%ld>", clientID_ver, &timestamp);
-        printf("messageD_ori clientID_ver:[%s] length %d\n", clientID_ver, strlen(clientID_ver));
-        printf("messageD_ori timestamp:[%ld]\n", timestamp);
+        printf("用K_client_TGS解密消息D获得clientID: %s\n", clientID_ver);
+        printf("用K_client_TGS解密消息D获得时间戳: %ld\n", timestamp);
         
         if (strcmp(serviceID_store, serviceID) != 0) {
             printf("serviceID wrong!\n");
@@ -136,30 +135,39 @@ int main(int argc, char **argv) {
         }
 
         if (timestamp > validity) {
-            printf("certification expired!\n");
+            printf("请求超时.\n");
             send(socket_client, "certification expired!", strlen("certification expired!"), 0);
             continue;
         } else {
-            printf("certification valid!\n");
+            printf("请求时间戳合法.\n");
         }
+
         unsigned char *K_client_SS = "keywith5"; // 只会生成一次，应该在回话过程中生成
         unsigned char ST_ori[maxChar];
         sprintf(ST_ori, "<%s,%s,%ld,%s>", clientID, client_address, validity, K_client_SS);
-        printf("send ST_ori:[%s] length %d\n",ST_ori, strlen(ST_ori));
+        printf("将clientID、client网络地址、票据有效期限和K_client_SS打包成ST的原文.\n");
         unsigned char ST[maxChar];
         uint64_t key_SS = kstr2k64(K_SS);
         int ST_len = encryption(ST_ori, ST, key_SS);
         ST[ST_len] = '\0';
+        printf("用K_SS加密ST的原文获得ST.\n");
         unsigned char messageE[maxChar];
         sprintf(messageE, "%s,%s", serviceID, ST);
+        printf("将serviceID和ST打包成messageE.\n");
         send(socket_client, messageE, strlen(messageE), 0);
-        printf("send messageE:[%s] length %d\n",messageE, strlen(messageE));
+        printf("发送messageE[原文: %s未加密]: success.\n", messageE);
 
         unsigned char messageF[maxChar];
         int messageF_len = encryption(K_client_SS, messageF, key_client_TGS);
         send(socket_client, messageF, messageF_len, 0);
-        printf("send messageF:[%s] length %d\n", messageF, messageF_len);
+        printf("发送messageF[原文: %s用K_client_TGS加密]: success.\n", K_client_SS);
 
+        unsigned char quit_str[maxChar];
+        int quit_len = recv(socket_client, quit_str, maxChar, 0);
+        if (strcmp(quit_str, "quit") == 0) {
+            printf("完成任务，TGS自动退出.\n");
+            break;
+        }
     }
     close(socket_TGS);
     return 0;
